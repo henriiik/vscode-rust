@@ -33,7 +33,6 @@ function parseOutput(output: string) {
 	for (let line of lines) {
 		let match = errorRegex.exec(line);
 		if (match) {
-			console.log(match);
 			errors[match[1]] = errors[match[1]] || [];
 			errors[match[1]].push(makeDiagnostic(match));
 		}
@@ -53,17 +52,24 @@ export function build() {
 	});
 
 	let output = "";
+	let channel = vscode.window.createOutputChannel("cargo");
+	let column = vscode.ViewColumn.Three;
+
+	channel.show(column);
 
 	child.stdout.on("data", (buffer: Buffer) => {
-		output += buffer.toString();
+		let out = buffer.toString();
+		channel.append(out);
+		output += out;
 	});
 
 	child.stderr.on("data", (buffer: Buffer) => {
-		output += buffer.toString();
+		let out = buffer.toString();
+		channel.append(out);
+		output += out;
 	});
 
 	child.on("exit", wat => {
 		parseOutput(output);
-		vscode.window.showInformationMessage("Cargo exit code: " + wat);
 	});
 }
