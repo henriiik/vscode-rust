@@ -20,34 +20,19 @@ interface RacerDefinition {
     context: string;
 }
 
-function spawnRacer(document: vscode.TextDocument, position: vscode.Position, command: string): Thenable<cp.ChildProcess> {
+function racerRun(document: vscode.TextDocument, position: vscode.Position, command: string): Thenable<RacerDefinition[]> {
     return document.save().then(() => {
-        return cp.spawn("racer", [
-            "--interface",
-            "tab-text",
-            command,
-            String(position.line + 1),
-            String(position.character),
-            document.fileName
-        ]);
-    });
-}
+        return new Promise<RacerDefinition[]>((resolve, reject) => {
+            let matches: RacerDefinition[] = [];
 
-function parseDefinition(match: string[]): RacerDefinition {
-    return {
-        name: match[1],
-        line: Number(match[2]),
-        character: Number(match[3]),
-        file: match[4],
-        type: match[5],
-        context: match[6],
-    };
-}
-
-function racerRun(document: vscode.TextDocument, position: vscode.Position, command: string) {
-    return spawnRacer(document, position, command).then((child) => {
-        return new Promise((resolve, reject) => {
-            let matches: string[][] = [];
+            let child = cp.spawn("racer", [
+                "--interface",
+                "tab-text",
+                command,
+                String(position.line + 1),
+                String(position.character),
+                document.fileName
+            ]);
 
             let stdout = [];
             child.stdout.on("data", (data: Buffer) => {
@@ -56,7 +41,14 @@ function racerRun(document: vscode.TextDocument, position: vscode.Position, comm
                 for (let line of lines) {
                     let data = line.split("\t");
                     if (data[0] === "MATCH") {
-                        matches.push(data);
+                        matches.push({
+                            name: data[1],
+                            line: Number(data[2]),
+                            character: Number(data[3]),
+                            file: data[4],
+                            type: data[5],
+                            context: data[6],
+                        });
                     }
                 }
             });
@@ -84,51 +76,28 @@ function racerRun(document: vscode.TextDocument, position: vscode.Position, comm
     });
 }
 
-function racerFindDefinition(document: vscode.TextDocument, position: vscode.Position): Thenable<RacerDefinition> {
-    return racerRun(document, position, "find-definition").then(matches => {
-        return parseDefinition(matches[0]);
-    });
+function racerComplete(document: vscode.TextDocument, position: vscode.Position): Thenable<RacerDefinition[]> {
+    return racerRun(document, position, "complete");
 }
 
-function makeCompletionItem(data: string[], root: string): vscode.CompletionItem {
-    let item = new vscode.CompletionItem(data[1]);
-    item.kind = itemKindMap[data[6]];
-    item.detail = data[5].replace(root, "");
-    item.documentation = data[7];
+function racerDefinition(document: vscode.TextDocument, position: vscode.Position): Thenable<RacerDefinition> {
+    return racerRun(document, position, "find-definition").then(matches => matches[0]);
+}
+
+// Completion Provider
+
+function makeCompletionItem(definition: RacerDefinition): vscode.CompletionItem {
+    let item = new vscode.CompletionItem(definition.name);
+    item.kind = itemKindMap[definition.type];
+    item.detail = definition.context;
+    item.documentation = definition.file;
     return item;
 }
 
 export class RustCompletionItemProvider implements vscode.CompletionItemProvider {
     provideCompletionItems(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Thenable<vscode.CompletionItem[]> {
-        return spawnRacer(document, position, "complete-with-snippet").then((child) => {
-            return new Promise((resolve, reject) => {
-                let root = vscode.workspace.rootPath + "/";
-                let items = [];
-
-                child.stdout.on("data", (data: Buffer) => {
-                    let lines = data.toString().split("\n");
-                    for (let line of lines) {
-                        let data = line.split("\t");
-                        if (data[0] === "MATCH") {
-                            items.push(makeCompletionItem(data, root));
-                        }
-                    }
-                });
-
-                let stderr = "";
-                child.stderr.on("data", (data: Buffer) => {
-                    stderr += data.toString();
-                });
-
-                child.on("close", (code) => {
-                    if (code > 0) {
-                        reject(null);
-                    } else {
-                        resolve(items);
-                    }
-                });
-
-            });
+        return racerComplete(document, position).then(matches => {
+            return matches.map(makeCompletionItem);
         });
     }
 }
@@ -144,7 +113,7 @@ function makeDefinition(definition: RacerDefinition): vscode.Definition {
 
 export class RustDefinitionProvider implements vscode.DefinitionProvider {
     provideDefinition(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Thenable<vscode.Definition> {
-        return racerFindDefinition(document, position).then(makeDefinition);
+        return racerDefinition(document, position).then(makeDefinition);
     }
 }
 
@@ -160,7 +129,7 @@ function makeHover(definition: RacerDefinition): vscode.Hover {
 
 export class RustHoverProvider implements vscode.HoverProvider {
     provideHover(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Thenable<vscode.Hover> {
-        return racerFindDefinition(document, position).then(makeHover);
+        return racerDefinition(document, position).then(makeHover);
     }
 }
 
@@ -208,7 +177,7 @@ function makeSignature(definition: RacerDefinition): vscode.SignatureInformation
 export class RustSignatureHelpProvider implements vscode.SignatureHelpProvider {
     provideSignatureHelp(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Thenable<vscode.SignatureHelp> {
         let caller = findCaller(document, position);
-        return racerFindDefinition(document, caller).then((definition) => {
+        return racerDefinition(document, caller).then((definition) => {
             let help = new vscode.SignatureHelp();
             help.activeParameter = countArgs(document, position, caller);
             help.activeSignature = 0;
