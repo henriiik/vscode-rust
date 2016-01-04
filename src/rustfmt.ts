@@ -6,7 +6,7 @@ let errorRegex = /(\w+):(\d+):(\d+):\s(\d+):(\d+)\s(\w+):\s(.*)/g;
 export class RustDocumentFormattingEditProvider implements vscode.DocumentFormattingEditProvider {
     provideDocumentFormattingEdits(document: vscode.TextDocument, options: vscode.FormattingOptions, token: vscode.CancellationToken): Thenable<vscode.TextEdit[]> {
         return new Promise<vscode.TextEdit[]>((resolve, reject) => {
-            let collection = vscode.languages.createDiagnosticCollection("rustfmt")
+            let collection = vscode.languages.createDiagnosticCollection("rustfmt");
             collection.clear();
 
             let child = cp.spawn("rustfmt", []);
