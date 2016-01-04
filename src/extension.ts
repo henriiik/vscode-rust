@@ -3,7 +3,7 @@
 import * as vscode from "vscode";
 import {build} from "./cargo";
 import {RustDocumentFormattingEditProvider} from "./rustfmt";
-import {RustCompletionItemProvider, RustDefinitionProvider, RustHoverProvider} from "./racer";
+import {RustCompletionItemProvider, RustDefinitionProvider, RustHoverProvider, RustSignatureHelpProvider} from "./racer";
 
 export function activate(context: vscode.ExtensionContext) {
 
@@ -16,6 +16,7 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(vscode.languages.registerCompletionItemProvider(RUST_MODE, new RustCompletionItemProvider()));
     context.subscriptions.push(vscode.languages.registerDefinitionProvider(RUST_MODE, new RustDefinitionProvider()));
     context.subscriptions.push(vscode.languages.registerHoverProvider(RUST_MODE, new RustHoverProvider()));
+    context.subscriptions.push(vscode.languages.registerSignatureHelpProvider(RUST_MODE, new RustSignatureHelpProvider(), ...['(', ',']));
 
     // cargo
     context.subscriptions.push(vscode.commands.registerCommand("rust.build", build));

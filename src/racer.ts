@@ -69,7 +69,6 @@ function makeDefinition(data: string[]): vscode.Definition {
     ));
 }
 
-
 export class RustDefinitionProvider implements vscode.DefinitionProvider {
     provideDefinition(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Thenable<vscode.Definition> {
         return spawnRacer(document, position, "find-definition").then((child) => {
@@ -115,7 +114,6 @@ export class RustHoverProvider implements vscode.HoverProvider {
     provideHover(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Thenable<vscode.Hover> {
         return spawnRacer(document, position, "find-definition").then((child) => {
             return new Promise((resolve, reject) => {
-                let root = vscode.workspace.rootPath + "/";
                 let hover: vscode.Hover = null;
 
                 child.stdout.on("data", (data: Buffer) => {
@@ -145,4 +143,78 @@ export class RustHoverProvider implements vscode.HoverProvider {
     }
 }
 
+function findCaller(document: vscode.TextDocument, position: vscode.Position): vscode.Position {
+    let offset = document.offsetAt(position);
+    let text = document.getText(new vscode.Range(0, 0, position.line, position.character));
+
+    let depth = 1;
+    while (offset > 0 && depth > 0) {
+        offset -= 1;
+
+        let c = text.charAt(offset);
+        if (c === "(") {
+            depth -= 1;
+        } else if (c === ")") {
+            depth += 1;
+        }
+    }
+
+    return document.positionAt(offset);
+}
+
+function countArgs(document: vscode.TextDocument, position: vscode.Position, caller: vscode.Position) {
+    return document.getText(new vscode.Range(caller, position)).split(",").length - 1;
+}
+
+function makeSignature(data: string[]): vscode.SignatureInformation {
+    let sign = data[6];
+    console.log(sign);
+    let params = sign.substring(
+        sign.indexOf("(") + 1,
+        sign.indexOf(")")
+    ).split(",");
+
+    let info = new vscode.SignatureInformation(sign);
+    for (let param of params) {
+        info.parameters.push(new vscode.ParameterInformation(param));
+    }
+
+    return info;
+}
+
+export class RustSignatureHelpProvider implements vscode.SignatureHelpProvider {
+    provideSignatureHelp(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Thenable<vscode.SignatureHelp> {
+        let caller = findCaller(document, position);
+        return spawnRacer(document, caller, "find-definition").then((child) => {
+            return new Promise((resolve, reject) => {
+                let help = new vscode.SignatureHelp();
+                help.activeParameter = countArgs(document, position, caller);
+                help.activeSignature = 0;
+
+                child.stdout.on("data", (data: Buffer) => {
+                    let lines = data.toString().split("\n");
+                    for (let line of lines) {
+                        let data = line.split("\t");
+                        if (data[0] === "MATCH") {
+                            help.signatures.push(makeSignature(data));
+                        }
+                    }
+                });
+
+                let stderr = "";
+                child.stderr.on("data", (data: Buffer) => {
+                    stderr += data.toString();
+                });
+
+                child.on("close", (code) => {
+                    if (code > 0) {
+                        reject(null);
+                    } else {
+                        resolve(help);
+                    }
+                });
+            });
+        });
+    }
+}
 
