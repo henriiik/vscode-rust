@@ -19,6 +19,30 @@ function spawnRacer(document: vscode.TextDocument, position: vscode.Position, co
     });
 }
 
+function findDefinition(document: vscode.TextDocument, position: vscode.Position): Thenable<string[]> {
+    return spawnRacer(document, position, "find-definition").then((child) => {
+        return new Promise((resolve, reject) => {
+            let stdout = [];
+            child.stdout.on("data", (data: Buffer) => {
+                stdout = stdout.concat(data.toString().split("\n"));
+            });
+
+            let stderr = [];
+            child.stderr.on("data", (data: Buffer) => {
+                stderr = stderr.concat(data.toString().split("\n"));
+            });
+
+            child.on("close", (code) => {
+                if (code > 0) {
+                    reject(stderr);
+                } else {
+                    resolve(stdout);
+                }
+            });
+        });
+    });
+}
+
 function makeCompletionItem(data: string[], root: string): vscode.CompletionItem {
     let item = new vscode.CompletionItem(data[1]);
     item.kind = itemKindMap[data[6]];
@@ -71,34 +95,18 @@ function makeDefinition(data: string[]): vscode.Definition {
 
 export class RustDefinitionProvider implements vscode.DefinitionProvider {
     provideDefinition(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Thenable<vscode.Definition> {
-        return spawnRacer(document, position, "find-definition").then((child) => {
-            return new Promise((resolve, reject) => {
-                let root = vscode.workspace.rootPath + "/";
-                let def: vscode.Definition = null;
+        return findDefinition(document, position).then((lines) => {
+            let root = vscode.workspace.rootPath + "/";
+            let definition: vscode.Definition = null;
 
-                child.stdout.on("data", (data: Buffer) => {
-                    let lines = data.toString().split("\n");
-                    for (let line of lines) {
-                        let data = line.split("\t");
-                        if (data[0] === "MATCH") {
-                            def = makeDefinition(data);
-                        }
-                    }
-                });
+            for (let line of lines) {
+                let data = line.split("\t");
+                if (data[0] === "MATCH") {
+                    definition = makeDefinition(data);
+                }
+            }
 
-                let stderr = "";
-                child.stderr.on("data", (data: Buffer) => {
-                    stderr += data.toString();
-                });
-
-                child.on("close", (code) => {
-                    if (code > 0) {
-                        reject(null);
-                    } else {
-                        resolve(def);
-                    }
-                });
-            });
+            return definition;
         });
     }
 }
@@ -112,33 +120,17 @@ function makeHover(data: string[]): vscode.Hover {
 
 export class RustHoverProvider implements vscode.HoverProvider {
     provideHover(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Thenable<vscode.Hover> {
-        return spawnRacer(document, position, "find-definition").then((child) => {
-            return new Promise((resolve, reject) => {
-                let hover: vscode.Hover = null;
+        return findDefinition(document, position).then((lines) => {
+            let hover: vscode.Hover = null;
 
-                child.stdout.on("data", (data: Buffer) => {
-                    let lines = data.toString().split("\n");
-                    for (let line of lines) {
-                        let data = line.split("\t");
-                        if (data[0] === "MATCH") {
-                            hover = makeHover(data);
-                        }
-                    }
-                });
+            for (let line of lines) {
+                let data = line.split("\t");
+                if (data[0] === "MATCH") {
+                    hover = makeHover(data);
+                }
+            }
 
-                let stderr = "";
-                child.stderr.on("data", (data: Buffer) => {
-                    stderr += data.toString();
-                });
-
-                child.on("close", (code) => {
-                    if (code > 0) {
-                        reject(null);
-                    } else {
-                        resolve(hover);
-                    }
-                });
-            });
+            return hover;
         });
     }
 }
@@ -168,7 +160,6 @@ function countArgs(document: vscode.TextDocument, position: vscode.Position, cal
 
 function makeSignature(data: string[]): vscode.SignatureInformation {
     let sign = data[6];
-    console.log(sign);
     let params = sign.substring(
         sign.indexOf("(") + 1,
         sign.indexOf(")")
@@ -185,36 +176,20 @@ function makeSignature(data: string[]): vscode.SignatureInformation {
 export class RustSignatureHelpProvider implements vscode.SignatureHelpProvider {
     provideSignatureHelp(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Thenable<vscode.SignatureHelp> {
         let caller = findCaller(document, position);
-        return spawnRacer(document, caller, "find-definition").then((child) => {
-            return new Promise((resolve, reject) => {
-                let help = new vscode.SignatureHelp();
-                help.activeParameter = countArgs(document, position, caller);
-                help.activeSignature = 0;
+        return findDefinition(document, caller).then((lines) => {
+            let help = new vscode.SignatureHelp();
+            help.activeParameter = countArgs(document, position, caller);
+            help.activeSignature = 0;
 
-                child.stdout.on("data", (data: Buffer) => {
-                    let lines = data.toString().split("\n");
-                    for (let line of lines) {
-                        let data = line.split("\t");
-                        if (data[0] === "MATCH") {
-                            help.signatures.push(makeSignature(data));
-                        }
-                    }
-                });
+            for (let line of lines) {
+                let data = line.split("\t");
+                if (data[0] === "MATCH") {
+                    help.signatures.push(makeSignature(data));
+                }
+            }
 
-                let stderr = "";
-                child.stderr.on("data", (data: Buffer) => {
-                    stderr += data.toString();
-                });
-
-                child.on("close", (code) => {
-                    if (code > 0) {
-                        reject(null);
-                    } else {
-                        resolve(help);
-                    }
-                });
-            });
+            return help;
         });
-    }
+    };
 }
 
