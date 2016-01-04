@@ -11,6 +11,15 @@ function showRacerError(code: Number, stdout: string[], stderr: string[]) {
     vscode.window.showErrorMessage(`Racer failed (${code}): ${stdout[0] || stderr[0]}`);
 }
 
+interface RacerDefinition {
+    name: string;
+    line: number;
+    character: number;
+    file: string;
+    type: string;
+    context: string;
+}
+
 function spawnRacer(document: vscode.TextDocument, position: vscode.Position, command: string): Thenable<cp.ChildProcess> {
     return document.save().then(() => {
         return cp.spawn("racer", [
@@ -24,17 +33,38 @@ function spawnRacer(document: vscode.TextDocument, position: vscode.Position, co
     });
 }
 
-function findDefinition(document: vscode.TextDocument, position: vscode.Position): Thenable<string[]> {
+function parseDefinition(match: string[]): RacerDefinition {
+    return {
+        name: match[1],
+        line: Number(match[2]),
+        character: Number(match[3]),
+        file: match[4],
+        type: match[5],
+        context: match[6],
+    };
+}
+
+function findDefinition(document: vscode.TextDocument, position: vscode.Position): Thenable<RacerDefinition> {
     return spawnRacer(document, position, "find-definition").then((child) => {
         return new Promise((resolve, reject) => {
+            let definition: RacerDefinition;
+
             let stdout = [];
             child.stdout.on("data", (data: Buffer) => {
-                stdout = stdout.concat(data.toString().split("\n"));
+                let lines = data.toString().split("\n");
+                stdout = stdout.concat(lines);
+                for (let line of lines) {
+                    let data = line.split("\t");
+                    if (data[0] === "MATCH") {
+                        definition = parseDefinition(data);
+                        return;
+                    }
+                }
             });
 
             let stderr = [];
             child.stderr.on("data", (data: Buffer) => {
-                stderr = stderr.concat(data.toString().split("\n"));
+                stdout = stdout.concat(data.toString().split("\n"));
             });
 
             child.on("close", (code) => {
@@ -48,7 +78,7 @@ function findDefinition(document: vscode.TextDocument, position: vscode.Position
                     showRacerError(code, stdout, stderr);
                     reject(debug);
                 } else {
-                    resolve(stdout);
+                    resolve(definition);
                 }
             });
         });
@@ -98,54 +128,38 @@ export class RustCompletionItemProvider implements vscode.CompletionItemProvider
     }
 }
 
-function makeDefinition(data: string[]): vscode.Definition {
-    return new vscode.Location(vscode.Uri.file(data[4]), new vscode.Position(
-        Number(data[2]) - 1,
-        Number(data[3])
+// DefinitionProvider
+
+function makeDefinition(definition: RacerDefinition): vscode.Definition {
+    return new vscode.Location(vscode.Uri.file(definition.file), new vscode.Position(
+        definition.line - 1,
+        definition.character
     ));
 }
 
 export class RustDefinitionProvider implements vscode.DefinitionProvider {
     provideDefinition(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Thenable<vscode.Definition> {
-        return findDefinition(document, position).then((lines) => {
-            let root = vscode.workspace.rootPath + "/";
-            let definition: vscode.Definition = null;
-
-            for (let line of lines) {
-                let data = line.split("\t");
-                if (data[0] === "MATCH") {
-                    definition = makeDefinition(data);
-                }
-            }
-
-            return definition;
-        });
+        return findDefinition(document, position).then(makeDefinition);
     }
 }
 
-function makeHover(data: string[]): vscode.Hover {
+// HoverProvider
+
+function makeHover(definition: RacerDefinition): vscode.Hover {
+    // TODO: fix better info for not functions
     return new vscode.Hover({
         language: "rust",
-        value: data[6]
+        value: definition.context
     });
 }
 
 export class RustHoverProvider implements vscode.HoverProvider {
     provideHover(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Thenable<vscode.Hover> {
-        return findDefinition(document, position).then((lines) => {
-            let hover: vscode.Hover = null;
-
-            for (let line of lines) {
-                let data = line.split("\t");
-                if (data[0] === "MATCH") {
-                    hover = makeHover(data);
-                }
-            }
-
-            return hover;
-        });
+        return findDefinition(document, position).then(makeHover);
     }
 }
+
+// SignatureHelpProvider
 
 function findCaller(document: vscode.TextDocument, position: vscode.Position): vscode.Position {
     let offset = document.offsetAt(position);
@@ -170,14 +184,15 @@ function countArgs(document: vscode.TextDocument, position: vscode.Position, cal
     return document.getText(new vscode.Range(caller, position)).split(",").length - 1;
 }
 
-function makeSignature(data: string[]): vscode.SignatureInformation {
-    let sign = data[6];
-    let params = sign.substring(
-        sign.indexOf("(") + 1,
-        sign.indexOf(")")
+function makeSignature(definition: RacerDefinition): vscode.SignatureInformation {
+    let signature = definition.context;
+    let params = signature.substring(
+        signature.indexOf("(") + 1,
+        signature.indexOf(")")
     ).split(",");
 
-    let info = new vscode.SignatureInformation(sign);
+    let info = new vscode.SignatureInformation(signature);
+
     for (let param of params) {
         info.parameters.push(new vscode.ParameterInformation(param));
     }
@@ -188,18 +203,11 @@ function makeSignature(data: string[]): vscode.SignatureInformation {
 export class RustSignatureHelpProvider implements vscode.SignatureHelpProvider {
     provideSignatureHelp(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Thenable<vscode.SignatureHelp> {
         let caller = findCaller(document, position);
-        return findDefinition(document, caller).then((lines) => {
+        return findDefinition(document, caller).then((definition) => {
             let help = new vscode.SignatureHelp();
             help.activeParameter = countArgs(document, position, caller);
             help.activeSignature = 0;
-
-            for (let line of lines) {
-                let data = line.split("\t");
-                if (data[0] === "MATCH") {
-                    help.signatures.push(makeSignature(data));
-                }
-            }
-
+            help.signatures.push(makeSignature(definition));
             return help;
         });
     };
