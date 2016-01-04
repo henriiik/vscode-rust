@@ -103,3 +103,46 @@ export class RustDefinitionProvider implements vscode.DefinitionProvider {
         });
     }
 }
+
+function makeHover(data: string[]): vscode.Hover {
+    return new vscode.Hover({
+        language: "rust",
+        value: data[6]
+    });
+}
+
+export class RustHoverProvider implements vscode.HoverProvider {
+    provideHover(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Thenable<vscode.Hover> {
+        return spawnRacer(document, position, "find-definition").then((child) => {
+            return new Promise((resolve, reject) => {
+                let root = vscode.workspace.rootPath + "/";
+                let hover: vscode.Hover = null;
+
+                child.stdout.on("data", (data: Buffer) => {
+                    let lines = data.toString().split("\n");
+                    for (let line of lines) {
+                        let data = line.split("\t");
+                        if (data[0] === "MATCH") {
+                            hover = makeHover(data);
+                        }
+                    }
+                });
+
+                let stderr = "";
+                child.stderr.on("data", (data: Buffer) => {
+                    stderr += data.toString();
+                });
+
+                child.on("close", (code) => {
+                    if (code > 0) {
+                        reject(null);
+                    } else {
+                        resolve(hover);
+                    }
+                });
+            });
+        });
+    }
+}
+
+

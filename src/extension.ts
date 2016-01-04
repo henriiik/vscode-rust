@@ -3,14 +3,20 @@
 import * as vscode from "vscode";
 import {build} from "./cargo";
 import {RustDocumentFormattingEditProvider} from "./rustfmt";
-import {RustCompletionItemProvider, RustDefinitionProvider} from "./racer";
+import {RustCompletionItemProvider, RustDefinitionProvider, RustHoverProvider} from "./racer";
 
 export function activate(context: vscode.ExtensionContext) {
 
     let RUST_MODE: vscode.DocumentFilter = { language: "rust", scheme: "file" };
+
+    // rustfmt
     context.subscriptions.push(vscode.languages.registerDocumentFormattingEditProvider(RUST_MODE, new RustDocumentFormattingEditProvider()));
+
+    // racer
     context.subscriptions.push(vscode.languages.registerCompletionItemProvider(RUST_MODE, new RustCompletionItemProvider()));
     context.subscriptions.push(vscode.languages.registerDefinitionProvider(RUST_MODE, new RustDefinitionProvider()));
+    context.subscriptions.push(vscode.languages.registerHoverProvider(RUST_MODE, new RustHoverProvider()));
 
+    // cargo
     context.subscriptions.push(vscode.commands.registerCommand("rust.build", build));
 }
