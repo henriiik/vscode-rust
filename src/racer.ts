@@ -44,10 +44,10 @@ function parseDefinition(match: string[]): RacerDefinition {
     };
 }
 
-function findDefinition(document: vscode.TextDocument, position: vscode.Position): Thenable<RacerDefinition> {
-    return spawnRacer(document, position, "find-definition").then((child) => {
+function racerRun(document: vscode.TextDocument, position: vscode.Position, command: string) {
+    return spawnRacer(document, position, command).then((child) => {
         return new Promise((resolve, reject) => {
-            let definition: RacerDefinition;
+            let matches: string[][] = [];
 
             let stdout = [];
             child.stdout.on("data", (data: Buffer) => {
@@ -56,8 +56,7 @@ function findDefinition(document: vscode.TextDocument, position: vscode.Position
                 for (let line of lines) {
                     let data = line.split("\t");
                     if (data[0] === "MATCH") {
-                        definition = parseDefinition(data);
-                        return;
+                        matches.push(data);
                     }
                 }
             });
@@ -78,10 +77,16 @@ function findDefinition(document: vscode.TextDocument, position: vscode.Position
                     showRacerError(code, stdout, stderr);
                     reject(debug);
                 } else {
-                    resolve(definition);
+                    resolve(matches);
                 }
             });
         });
+    });
+}
+
+function racerFindDefinition(document: vscode.TextDocument, position: vscode.Position): Thenable<RacerDefinition> {
+    return racerRun(document, position, "find-definition").then(matches => {
+        return parseDefinition(matches[0]);
     });
 }
 
@@ -139,7 +144,7 @@ function makeDefinition(definition: RacerDefinition): vscode.Definition {
 
 export class RustDefinitionProvider implements vscode.DefinitionProvider {
     provideDefinition(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Thenable<vscode.Definition> {
-        return findDefinition(document, position).then(makeDefinition);
+        return racerFindDefinition(document, position).then(makeDefinition);
     }
 }
 
@@ -155,7 +160,7 @@ function makeHover(definition: RacerDefinition): vscode.Hover {
 
 export class RustHoverProvider implements vscode.HoverProvider {
     provideHover(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Thenable<vscode.Hover> {
-        return findDefinition(document, position).then(makeHover);
+        return racerFindDefinition(document, position).then(makeHover);
     }
 }
 
@@ -203,7 +208,7 @@ function makeSignature(definition: RacerDefinition): vscode.SignatureInformation
 export class RustSignatureHelpProvider implements vscode.SignatureHelpProvider {
     provideSignatureHelp(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Thenable<vscode.SignatureHelp> {
         let caller = findCaller(document, position);
-        return findDefinition(document, caller).then((definition) => {
+        return racerFindDefinition(document, caller).then((definition) => {
             let help = new vscode.SignatureHelp();
             help.activeParameter = countArgs(document, position, caller);
             help.activeSignature = 0;
