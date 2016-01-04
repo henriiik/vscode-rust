@@ -2,8 +2,24 @@ import * as vscode from "vscode";
 import * as cp from "child_process";
 
 let itemKindMap = {
+    "Const": vscode.CompletionItemKind.Variable,
+    "Crate": vscode.CompletionItemKind.Module,
+    "Enum": vscode.CompletionItemKind.Enum,
+    "EnumVariant": vscode.CompletionItemKind.Enum,
+    "FnArg": vscode.CompletionItemKind.Variable,
+    "For": vscode.CompletionItemKind.Variable,
     "Function": vscode.CompletionItemKind.Function,
+    "IfLet": vscode.CompletionItemKind.Variable,
+    "Impl": vscode.CompletionItemKind.Interface,
+    "Let": vscode.CompletionItemKind.Variable,
+    "MatchArm": vscode.CompletionItemKind.Value,
     "Module": vscode.CompletionItemKind.Module,
+    "Static": vscode.CompletionItemKind.Variable,
+    "Struct": vscode.CompletionItemKind.Class,
+    "StructField": vscode.CompletionItemKind.Field,
+    "Trait": vscode.CompletionItemKind.Interface,
+    "Type": vscode.CompletionItemKind.Interface,
+    "WhileLet": vscode.CompletionItemKind.Variable,
 };
 
 function showRacerError(code: Number, stdout: string[], stderr: string[]) {
@@ -120,10 +136,9 @@ export class RustDefinitionProvider implements vscode.DefinitionProvider {
 // HoverProvider
 
 function makeHover(definition: RacerDefinition): vscode.Hover {
-    // TODO: fix better info for not functions
     return new vscode.Hover({
         language: "rust",
-        value: definition.context
+        value: `(${definition.type}) ${definition.context}`
     });
 }
 
