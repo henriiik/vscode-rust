@@ -6,6 +6,11 @@ let itemKindMap = {
     "Module": vscode.CompletionItemKind.Module,
 };
 
+function showRacerError(code: Number, stdout: string[], stderr: string[]) {
+    let message = stdout[0] || stderr[0];
+    vscode.window.showErrorMessage(`Racer failed (${code}): ${stdout[0] || stderr[0]}`);
+}
+
 function spawnRacer(document: vscode.TextDocument, position: vscode.Position, command: string): Thenable<cp.ChildProcess> {
     return document.save().then(() => {
         return cp.spawn("racer", [
@@ -34,7 +39,14 @@ function findDefinition(document: vscode.TextDocument, position: vscode.Position
 
             child.on("close", (code) => {
                 if (code > 0) {
-                    reject(stderr);
+                    let debug = {
+                        code,
+                        stdout,
+                        stderr
+                    };
+                    console.log(debug);
+                    showRacerError(code, stdout, stderr);
+                    reject(debug);
                 } else {
                     resolve(stdout);
                 }
