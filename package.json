@@ -11,14 +11,15 @@
     "Other"
   ],
   "activationEvents": [
-    "onLanguage:rust"
+    "onLanguage:rust",
+    "onCommand:rust.tasks.create"
   ],
   "main": "./out/src/extension",
   "contributes": {
     "commands": [
       {
-        "command": "rust.build",
-        "title": "Cargo Build"
+        "command": "rust.tasks.create",
+        "title": "Rust: Create Tasks Configuration"
       }
     ]
   },

@@ -1,9 +1,9 @@
 // The module "vscode" contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from "vscode";
-import {build} from "./cargo";
 import {RustDocumentFormattingEditProvider} from "./rustfmt";
 import {RustCompletionItemProvider, RustDefinitionProvider, RustHoverProvider, RustSignatureHelpProvider} from "./racer";
+import * as tasks from "./tasks";
 
 export function activate(context: vscode.ExtensionContext) {
 
@@ -18,6 +18,6 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(vscode.languages.registerHoverProvider(RUST_MODE, new RustHoverProvider()));
     context.subscriptions.push(vscode.languages.registerSignatureHelpProvider(RUST_MODE, new RustSignatureHelpProvider(), ...["(", ","]));
 
-    // cargo
-    context.subscriptions.push(vscode.commands.registerCommand("rust.build", build));
+    // tasks
+    context.subscriptions.push(vscode.commands.registerCommand("rust.tasks.create", tasks.create));
 }
