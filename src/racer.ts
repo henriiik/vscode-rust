@@ -145,7 +145,7 @@ export class RustDefinitionProvider implements vscode.DefinitionProvider {
 function makeHover(definition: RacerDefinition): vscode.Hover {
     return new vscode.Hover({
         language: "rust",
-        value: `(${definition.type}) ${definition.context}`
+        value: `(${definition.type}) ${definition.context.replace(/\s+/g, " ")}`
     });
 }
 
@@ -176,11 +176,22 @@ function findCaller(document: vscode.TextDocument, position: vscode.Position): v
     return document.positionAt(offset);
 }
 
+function isMethodCall(document: vscode.TextDocument, caller: vscode.Position): boolean {
+    let callerRange = document.getWordRangeAtPosition(caller);
+    let prefixRange = new vscode.Range(
+        callerRange.start.line,
+        callerRange.start.character - 1,
+        callerRange.start.line,
+        callerRange.start.character
+    );
+    return document.getText(prefixRange) === ".";
+}
+
 function countArgs(document: vscode.TextDocument, position: vscode.Position, caller: vscode.Position) {
     return document.getText(new vscode.Range(caller, position)).split(",").length - 1;
 }
 
-function makeSignature(definition: RacerDefinition): vscode.SignatureInformation {
+function makeSignature(definition: RacerDefinition, skipFirst: boolean): vscode.SignatureInformation {
     let signature = definition.context;
     let params = signature.substring(
         signature.indexOf("(") + 1,
@@ -189,8 +200,12 @@ function makeSignature(definition: RacerDefinition): vscode.SignatureInformation
 
     let info = new vscode.SignatureInformation(signature);
 
+    if (skipFirst) {
+        params = params.slice(1);
+    }
+
     for (let param of params) {
-        info.parameters.push(new vscode.ParameterInformation(param));
+        info.parameters.push(new vscode.ParameterInformation(param.trim()));
     }
 
     return info;
@@ -199,11 +214,12 @@ function makeSignature(definition: RacerDefinition): vscode.SignatureInformation
 export class RustSignatureHelpProvider implements vscode.SignatureHelpProvider {
     provideSignatureHelp(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Thenable<vscode.SignatureHelp> {
         let caller = findCaller(document, position);
+        let skipFirst = isMethodCall(document, caller);
         return racerDefinition(document, caller).then((definition) => {
             let help = new vscode.SignatureHelp();
             help.activeParameter = countArgs(document, position, caller);
             help.activeSignature = 0;
-            help.signatures.push(makeSignature(definition));
+            help.signatures.push(makeSignature(definition, skipFirst));
             return help;
         });
     };
