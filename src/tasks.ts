@@ -52,6 +52,10 @@ let tasks = {
         {
             "taskName": "doc",
             "problemMatcher": problemMatcher
+        },
+        {
+            "taskName": "fmt",
+            "problemMatcher": problemMatcher
         }
     ]
 };
