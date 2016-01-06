@@ -22,9 +22,9 @@ let itemKindMap = {
     "WhileLet": vscode.CompletionItemKind.Variable,
 };
 
-function showRacerError(code: Number, stdout: string[], stderr: string[]) {
-    let message = stdout[0] || stderr[0];
-    vscode.window.showErrorMessage(`Racer failed (${code}): ${stdout[0] || stderr[0]}`);
+function showRacerError(code: Number, stdout: string, stderr: string) {
+    let message = stdout || stderr;
+    vscode.window.showErrorMessage(`Racer failed (${code}): ${message}`);
 }
 
 interface RacerDefinition {
@@ -39,8 +39,6 @@ interface RacerDefinition {
 function racerRun(document: vscode.TextDocument, position: vscode.Position, command: string): Thenable<RacerDefinition[]> {
     return document.save().then(() => {
         return new Promise<RacerDefinition[]>((resolve, reject) => {
-            let matches: RacerDefinition[] = [];
-
             let child = cp.spawn("racer", [
                 "--interface",
                 "tab-text",
@@ -50,28 +48,14 @@ function racerRun(document: vscode.TextDocument, position: vscode.Position, comm
                 document.fileName
             ]);
 
-            let stdout = [];
+            let stdout = "";
             child.stdout.on("data", (data: Buffer) => {
-                let lines = data.toString().split("\n");
-                stdout = stdout.concat(lines);
-                for (let line of lines) {
-                    let data = line.split("\t");
-                    if (data[0] === "MATCH") {
-                        matches.push({
-                            name: data[1],
-                            line: Number(data[2]),
-                            character: Number(data[3]),
-                            file: data[4],
-                            type: data[5],
-                            context: data[6],
-                        });
-                    }
-                }
+                stdout += data.toString();
             });
 
-            let stderr = [];
+            let stderr = "";
             child.stderr.on("data", (data: Buffer) => {
-                stdout = stdout.concat(data.toString().split("\n"));
+                stderr += data.toString();
             });
 
             child.on("close", (code) => {
@@ -85,6 +69,29 @@ function racerRun(document: vscode.TextDocument, position: vscode.Position, comm
                     showRacerError(code, stdout, stderr);
                     reject(debug);
                 } else {
+                    let matches: RacerDefinition[] = [];
+                    let lines = stdout.split("\n");
+                    let length = lines.length - 2; // skip last END and empty line;
+                    let count = 0;
+                    while (count < length) {
+                        let data = lines[count].split("\t");
+                        count += 1;
+                        if (data[0] === "MATCH") {
+                            let match = {
+                                name: data[1],
+                                line: Number(data[2]),
+                                character: Number(data[3]),
+                                file: data[4],
+                                type: data[5],
+                                context: data.slice(6).join(),
+                            };
+                            while (count < length && !lines[count].startsWith("MATCH")) {
+                                match.context += lines[count];
+                                count += 1;
+                            }
+                            matches.push(match);
+                        }
+                    }
                     resolve(matches);
                 }
             });
@@ -201,4 +208,3 @@ export class RustSignatureHelpProvider implements vscode.SignatureHelpProvider {
         });
     };
 }
-
