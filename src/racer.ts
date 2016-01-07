@@ -216,6 +216,9 @@ export class RustSignatureHelpProvider implements vscode.SignatureHelpProvider {
         let caller = findCaller(document, position);
         let skipFirst = isMethodCall(document, caller);
         return racerDefinition(document, caller).then((definition) => {
+            if (caller.line === (definition.line - 1)) {
+                return null;
+            }
             let help = new vscode.SignatureHelp();
             help.activeParameter = countArgs(document, position, caller);
             help.activeSignature = 0;
