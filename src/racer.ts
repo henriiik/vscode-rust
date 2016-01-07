@@ -119,7 +119,7 @@ function makeCompletionItem(definition: RacerDefinition): vscode.CompletionItem 
     return item;
 }
 
-export class RustCompletionItemProvider implements vscode.CompletionItemProvider {
+export class CompletionItemProvider implements vscode.CompletionItemProvider {
     provideCompletionItems(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Thenable<vscode.CompletionItem[]> {
         return racerComplete(document, position).then(matches => {
             return matches.map(makeCompletionItem);
@@ -136,7 +136,7 @@ function makeDefinition(definition: RacerDefinition): vscode.Definition {
     ));
 }
 
-export class RustDefinitionProvider implements vscode.DefinitionProvider {
+export class DefinitionProvider implements vscode.DefinitionProvider {
     provideDefinition(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Thenable<vscode.Definition> {
         return racerDefinition(document, position).then(makeDefinition);
     }
@@ -151,7 +151,7 @@ function makeHover(definition: RacerDefinition): vscode.Hover {
     });
 }
 
-export class RustHoverProvider implements vscode.HoverProvider {
+export class HoverProvider implements vscode.HoverProvider {
     provideHover(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Thenable<vscode.Hover> {
         return racerDefinition(document, position).then(makeHover);
     }
@@ -213,7 +213,7 @@ function makeSignature(definition: RacerDefinition, skipFirst: boolean): vscode.
     return info;
 }
 
-export class RustSignatureHelpProvider implements vscode.SignatureHelpProvider {
+export class SignatureHelpProvider implements vscode.SignatureHelpProvider {
     provideSignatureHelp(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Thenable<vscode.SignatureHelp> {
         let caller = findCaller(document, position);
         let skipFirst = isMethodCall(document, caller);

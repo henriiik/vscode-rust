@@ -4,7 +4,7 @@ import * as path from "path";
 
 let errorRegex = /(\w+):(\d+):(\d+):\s(\d+):(\d+)\s(\w+):\s(.*)/g;
 
-export class RustDocumentFormattingEditProvider implements vscode.DocumentFormattingEditProvider {
+export class DocumentFormattingEditProvider implements vscode.DocumentFormattingEditProvider {
     provideDocumentFormattingEdits(document: vscode.TextDocument, options: vscode.FormattingOptions, token: vscode.CancellationToken): Thenable<vscode.TextEdit[]> {
         return new Promise<vscode.TextEdit[]>((resolve, reject) => {
             let collection = vscode.languages.createDiagnosticCollection("Rust");
