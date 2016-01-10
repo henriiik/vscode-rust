@@ -1,15 +1,18 @@
 import * as vscode from "vscode";
 import * as cp from "child_process";
+import * as path from "path";
 
 let errorRegex = /(\w+):(\d+):(\d+):\s(\d+):(\d+)\s(\w+):\s(.*)/g;
 
 export class RustDocumentFormattingEditProvider implements vscode.DocumentFormattingEditProvider {
     provideDocumentFormattingEdits(document: vscode.TextDocument, options: vscode.FormattingOptions, token: vscode.CancellationToken): Thenable<vscode.TextEdit[]> {
         return new Promise<vscode.TextEdit[]>((resolve, reject) => {
-            let collection = vscode.languages.createDiagnosticCollection("rustfmt");
+            let collection = vscode.languages.createDiagnosticCollection("Rust");
             collection.clear();
 
-            let child = cp.spawn("rustfmt", []);
+            let child = cp.spawn("rustfmt", [], {
+                cwd: path.dirname(document.fileName)
+            });
             child.stdin.write(document.getText());
             child.stdin.end();
 
