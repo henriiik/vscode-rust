@@ -1,35 +1,46 @@
 {
-  "name": "vscode-rust",
-  "displayName": "Rust For Visual Studio Code",
-  "description": "Rust support for Visual Studio Code",
-  "version": "0.0.1",
-  "publisher": "henriiik",
-  "engines": {
-    "vscode": "^0.10.1"
-  },
-  "categories": [
-    "Other"
-  ],
-  "activationEvents": [
-    "onLanguage:rust",
-    "onCommand:rust.tasks.create"
-  ],
-  "main": "./out/src/extension",
-  "contributes": {
-    "commands": [
-      {
-        "command": "rust.tasks.create",
-        "title": "Rust: Create Tasks Configuration"
-      }
-    ]
-  },
-  "scripts": {
-    "vscode:prepublish": "node ./node_modules/vscode/bin/compile",
-    "compile": "node ./node_modules/vscode/bin/compile -watch -p ./"
-  },
-  "devDependencies": {
-    "tslint": "^3.2.1",
-    "typescript": "^1.7.5",
-    "vscode": "^0.10.7"
-  }
+    "name": "vscode-rust",
+    "displayName": "Rust For Visual Studio Code",
+    "description": "Rust support for Visual Studio Code",
+    "version": "0.0.1",
+    "publisher": "henriiik",
+    "engines": {
+        "vscode": "^0.10.1"
+    },
+    "categories": [
+        "Other"
+    ],
+    "activationEvents": [
+        "onLanguage:rust",
+        "onCommand:rust.tasks.create"
+    ],
+    "main": "./out/src/extension",
+    "contributes": {
+        "configuration": {
+            "title": "Rust Configuration",
+            "type": "object",
+            "properties": {
+                "rust.path.racer": {
+                    "type": "string",
+                    "default": "racer",
+                    "description": "path to the racer executable"
+                }
+            }
+        },
+        "commands": [
+            {
+                "command": "rust.tasks.create",
+                "title": "Rust: Create Tasks Configuration"
+            }
+        ]
+    },
+    "scripts": {
+        "vscode:prepublish": "node ./node_modules/vscode/bin/compile",
+        "compile": "node ./node_modules/vscode/bin/compile -watch -p ./"
+    },
+    "devDependencies": {
+        "tslint": "^3.2.1",
+        "typescript": "^1.7.5",
+        "vscode": "^0.10.7"
+    }
 }

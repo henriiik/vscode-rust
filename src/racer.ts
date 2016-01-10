@@ -39,7 +39,8 @@ interface RacerDefinition {
 function racerRun(document: vscode.TextDocument, position: vscode.Position, command: string): Thenable<RacerDefinition[]> {
     return document.save().then(() => {
         return new Promise<RacerDefinition[]>((resolve, reject) => {
-            let child = cp.spawn("racer", [
+            let config = vscode.workspace.getConfiguration("rust.path");
+            let child = cp.spawn(config.get("racer", "racer"), [
                 "--interface",
                 "tab-text",
                 command,
