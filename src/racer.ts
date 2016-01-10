@@ -37,65 +37,66 @@ interface RacerDefinition {
 }
 
 function racerRun(document: vscode.TextDocument, position: vscode.Position, command: string): Thenable<RacerDefinition[]> {
-    return document.save().then(() => {
-        return new Promise<RacerDefinition[]>((resolve, reject) => {
-            let config = vscode.workspace.getConfiguration("rust.path");
-            let child = cp.spawn(config.get("racer", "racer"), [
-                "--interface",
-                "tab-text",
-                command,
-                String(position.line + 1),
-                String(position.character),
-                document.fileName
-            ]);
+    return new Promise<RacerDefinition[]>((resolve, reject) => {
+        let config = vscode.workspace.getConfiguration("rust.path");
+        let child = cp.spawn(config.get("racer", "racer"), [
+            "--interface",
+            "tab-text",
+            command,
+            String(position.line + 1),
+            String(position.character),
+            document.fileName,
+            "-"
+        ]);
+        child.stdin.write(document.getText());
+        child.stdin.end();
 
-            let stdout = "";
-            child.stdout.on("data", (data: Buffer) => {
-                stdout += data.toString();
-            });
+        let stdout = "";
+        child.stdout.on("data", (data: Buffer) => {
+            stdout += data.toString();
+        });
 
-            let stderr = "";
-            child.stderr.on("data", (data: Buffer) => {
-                stderr += data.toString();
-            });
+        let stderr = "";
+        child.stderr.on("data", (data: Buffer) => {
+            stderr += data.toString();
+        });
 
-            child.on("close", (code) => {
-                if (code > 0) {
-                    let debug = {
-                        code,
-                        stdout,
-                        stderr
-                    };
-                    console.log(debug);
-                    showRacerError(code, stdout, stderr);
-                    reject(debug);
-                } else {
-                    let matches: RacerDefinition[] = [];
-                    let lines = stdout.split("\n");
-                    let length = lines.length - 2; // skip last END and empty line;
-                    let count = 0;
-                    while (count < length) {
-                        let data = lines[count].split("\t");
-                        count += 1;
-                        if (data[0] === "MATCH") {
-                            let match = {
-                                name: data[1],
-                                line: Number(data[2]),
-                                character: Number(data[3]),
-                                file: data[4],
-                                type: data[5],
-                                context: data.slice(6).join(),
-                            };
-                            while (count < length && !lines[count].startsWith("MATCH")) {
-                                match.context += lines[count];
-                                count += 1;
-                            }
-                            matches.push(match);
+        child.on("close", (code) => {
+            if (code > 0) {
+                let debug = {
+                    code,
+                    stdout,
+                    stderr
+                };
+                console.log(debug);
+                showRacerError(code, stdout, stderr);
+                reject(debug);
+            } else {
+                let matches: RacerDefinition[] = [];
+                let lines = stdout.split("\n");
+                let length = lines.length - 2; // skip last END and empty line;
+                let count = 0;
+                while (count < length) {
+                    let data = lines[count].split("\t");
+                    count += 1;
+                    if (data[0] === "MATCH") {
+                        let match = {
+                            name: data[1],
+                            line: Number(data[2]),
+                            character: Number(data[3]),
+                            file: data[4],
+                            type: data[5],
+                            context: data.slice(6).join(),
+                        };
+                        while (count < length && !lines[count].startsWith("MATCH")) {
+                            match.context += lines[count];
+                            count += 1;
                         }
+                        matches.push(match);
                     }
-                    resolve(matches);
                 }
-            });
+                resolve(matches);
+            }
         });
     });
 }
