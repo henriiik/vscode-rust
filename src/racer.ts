@@ -38,7 +38,7 @@ interface RacerDefinition {
 
 export class Racer {
     child: cp.ChildProcess;
-    lastRun: Thenable<RacerDefinition[]>;
+    lastRun: Promise<RacerDefinition[]>;
 
     constructor() {
         this.lastRun = new Promise(resolve => resolve([]));
@@ -65,8 +65,8 @@ export class Racer {
         this.child.kill();
     }
 
-    run(document: vscode.TextDocument, position: vscode.Position, command: string): Thenable<RacerDefinition[]> {
-        this.lastRun = this.lastRun.then(() => {
+    run(document: vscode.TextDocument, position: vscode.Position, command: string): Promise<RacerDefinition[]> {
+        this.lastRun = this.lastRun.catch(e => {}).then(() => {
             return new Promise<RacerDefinition[]>((resolve, reject) => {
                 let child = this.child;
                 let stdout = "";
@@ -85,7 +85,6 @@ export class Racer {
                 child.stdin.write(cmd);
                 child.stdin.write("\n");
                 child.stdin.write(document.getText());
-                child.stdin.write("\n");
                 child.stdin.write("\x04");
 
                 function stderrListener(data: Buffer) {
@@ -138,29 +137,29 @@ export class Racer {
         return this.lastRun;
     }
 
-    complete(document: vscode.TextDocument, position: vscode.Position): Thenable<RacerDefinition[]> {
+    complete(document: vscode.TextDocument, position: vscode.Position): Promise<RacerDefinition[]> {
         return this.run(document, position, "complete");
     }
 
-    define(document: vscode.TextDocument, position: vscode.Position): Thenable<RacerDefinition> {
+    define(document: vscode.TextDocument, position: vscode.Position): Promise<RacerDefinition> {
         return this.run(document, position, "find-definition").then(matches => matches[0]);
     }
 
-    provideCompletionItems(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Thenable<vscode.CompletionItem[]> {
+    provideCompletionItems(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Promise<vscode.CompletionItem[]> {
         return this.complete(document, position).then(matches => {
             return matches.map(makeCompletionItem);
         });
     }
 
-    provideDefinition(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Thenable<vscode.Definition> {
+    provideDefinition(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Promise<vscode.Definition> {
         return this.define(document, position).then(makeDefinition);
     }
 
-    provideHover(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Thenable<vscode.Hover> {
+    provideHover(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Promise<vscode.Hover> {
         return this.define(document, position).then(makeHover);
     }
 
-    provideSignatureHelp(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Thenable<vscode.SignatureHelp> {
+    provideSignatureHelp(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Promise<vscode.SignatureHelp> {
         let caller = findCaller(document, position);
         let skipFirst = isMethodCall(document, caller);
         return this.define(document, caller).then((definition) => {
