@@ -36,80 +36,147 @@ interface RacerDefinition {
     context: string;
 }
 
-function racerRun(document: vscode.TextDocument, position: vscode.Position, command: string): Thenable<RacerDefinition[]> {
-    return new Promise<RacerDefinition[]>((resolve, reject) => {
+export class Racer {
+    child: cp.ChildProcess;
+    lastRun: Thenable<RacerDefinition[]>;
+
+    constructor() {
+        this.lastRun = new Promise(resolve => resolve([]));
+        this.start();
+    }
+
+    start() {
         let config = vscode.workspace.getConfiguration("rust.path");
-        let child = cp.spawn(config.get("racer", "racer"), [
+        this.child = cp.spawn(config.get("racer", "racer"), [
             "--interface",
             "tab-text",
-            command,
-            String(position.line + 1),
-            String(position.character),
-            document.fileName,
-            "-"
+            "daemon",
         ]);
-        child.stdin.write(document.getText());
-        child.stdin.end();
-
-        let stdout = "";
-        child.stdout.on("data", (data: Buffer) => {
-            stdout += data.toString();
+        this.child.on("close", (code, signal) => {
+            console.error(code, signal);
+            vscode.window.showErrorMessage(`Racer failed (${code}): ${signal}`);
+            this.lastRun = new Promise(resolve => resolve([]));
+            this.start();
         });
+    }
 
-        let stderr = "";
-        child.stderr.on("data", (data: Buffer) => {
-            stderr += data.toString();
-        });
+    stop() {
+        this.child.removeAllListeners("close");
+        this.child.kill();
+    }
 
-        child.on("close", (code) => {
-            if (code > 0) {
-                let debug = {
-                    code,
-                    stdout,
-                    stderr
-                };
-                console.log(debug);
-                showRacerError(code, stdout, stderr);
-                reject(debug);
-            } else {
-                let matches: RacerDefinition[] = [];
-                let lines = stdout.split("\n");
-                let length = lines.length - 2; // skip last END and empty line;
-                let count = 0;
-                while (count < length) {
-                    let data = lines[count].split("\t");
-                    count += 1;
-                    if (data[0] === "MATCH") {
-                        let match = {
-                            name: data[1],
-                            line: Number(data[2]),
-                            character: Number(data[3]),
-                            file: data[4],
-                            type: data[5],
-                            context: data.slice(6).join(),
-                        };
-                        while (count < length && !lines[count].startsWith("MATCH")) {
-                            match.context += lines[count];
-                            count += 1;
-                        }
-                        matches.push(match);
-                    }
+    run(document: vscode.TextDocument, position: vscode.Position, command: string): Thenable<RacerDefinition[]> {
+        this.lastRun = this.lastRun.then(() => {
+            return new Promise<RacerDefinition[]>((resolve, reject) => {
+                let child = this.child;
+                let stdout = "";
+                let stderr = "";
+
+                let cmd = [
+                    command,
+                    String(position.line + 1),
+                    String(position.character),
+                    document.fileName,
+                    "-"
+                ].join("\t");
+
+                console.log(cmd);
+
+                child.stdin.write(cmd);
+                child.stdin.write("\n");
+                child.stdin.write(document.getText());
+                child.stdin.write("\n");
+                child.stdin.write("\x04");
+
+                function stderrListener(data: Buffer) {
+                    console.error("ERROR!!");
+                    console.error(data.toString());
+                    child.stderr.removeListener("data", stderrListener);
+                    child.stdout.removeListener("data", stdoutListener);
+                    reject(null);
                 }
-                resolve(matches);
-            }
+
+                function stdoutListener(data: Buffer) {
+                    console.log("DATA!!");
+                    console.log(data.toString());
+                    stdout += data.toString();
+                    if (stdout.endsWith("END\n")) {
+                        child.stderr.removeListener("data", stderrListener);
+                        child.stdout.removeListener("data", stdoutListener);
+                        let matches: RacerDefinition[] = [];
+                        let lines = stdout.split("\n");
+                        let length = lines.length - 2; // skip last END and empty line;
+                        let count = 0;
+                        while (count < length) {
+                            let data = lines[count].split("\t");
+                            count += 1;
+                            if (data[0] === "MATCH") {
+                                let match = {
+                                    name: data[1],
+                                    line: Number(data[2]),
+                                    character: Number(data[3]),
+                                    file: data[4],
+                                    type: data[5],
+                                    context: data.slice(6).join(),
+                                };
+                                while (count < length && !lines[count].startsWith("MATCH")) {
+                                    match.context += lines[count];
+                                    count += 1;
+                                }
+                                matches.push(match);
+                            }
+                        }
+                        resolve(matches);
+                    }
+                };
+
+                child.stdout.on("data", stdoutListener);
+                child.stderr.on("data", stderrListener);
+            });
         });
-    });
+
+        return this.lastRun;
+    }
+
+    complete(document: vscode.TextDocument, position: vscode.Position): Thenable<RacerDefinition[]> {
+        return this.run(document, position, "complete");
+    }
+
+    define(document: vscode.TextDocument, position: vscode.Position): Thenable<RacerDefinition> {
+        return this.run(document, position, "find-definition").then(matches => matches[0]);
+    }
+
+    provideCompletionItems(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Thenable<vscode.CompletionItem[]> {
+        return this.complete(document, position).then(matches => {
+            return matches.map(makeCompletionItem);
+        });
+    }
+
+    provideDefinition(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Thenable<vscode.Definition> {
+        return this.define(document, position).then(makeDefinition);
+    }
+
+    provideHover(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Thenable<vscode.Hover> {
+        return this.define(document, position).then(makeHover);
+    }
+
+    provideSignatureHelp(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Thenable<vscode.SignatureHelp> {
+        let caller = findCaller(document, position);
+        let skipFirst = isMethodCall(document, caller);
+        return this.define(document, caller).then((definition) => {
+            if (caller.line === (definition.line - 1)) {
+                return null;
+            }
+            let help = new vscode.SignatureHelp();
+            help.activeParameter = countArgs(document, position, caller);
+            help.activeSignature = 0;
+            help.signatures.push(makeSignature(definition, skipFirst));
+            return help;
+        });
+    };
 }
 
-function racerComplete(document: vscode.TextDocument, position: vscode.Position): Thenable<RacerDefinition[]> {
-    return racerRun(document, position, "complete");
-}
-
-function racerDefinition(document: vscode.TextDocument, position: vscode.Position): Thenable<RacerDefinition> {
-    return racerRun(document, position, "find-definition").then(matches => matches[0]);
-}
-
-// Completion Provider
+// CompletionProvider Helpers
 
 function makeCompletionItem(definition: RacerDefinition): vscode.CompletionItem {
     let item = new vscode.CompletionItem(definition.name);
@@ -119,15 +186,7 @@ function makeCompletionItem(definition: RacerDefinition): vscode.CompletionItem 
     return item;
 }
 
-export class CompletionItemProvider implements vscode.CompletionItemProvider {
-    provideCompletionItems(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Thenable<vscode.CompletionItem[]> {
-        return racerComplete(document, position).then(matches => {
-            return matches.map(makeCompletionItem);
-        });
-    }
-}
-
-// DefinitionProvider
+// DefinitionProvider Helpers
 
 function makeDefinition(definition: RacerDefinition): vscode.Definition {
     return new vscode.Location(vscode.Uri.file(definition.file), new vscode.Position(
@@ -136,13 +195,7 @@ function makeDefinition(definition: RacerDefinition): vscode.Definition {
     ));
 }
 
-export class DefinitionProvider implements vscode.DefinitionProvider {
-    provideDefinition(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Thenable<vscode.Definition> {
-        return racerDefinition(document, position).then(makeDefinition);
-    }
-}
-
-// HoverProvider
+// HoverProvider Helpers
 
 function makeHover(definition: RacerDefinition): vscode.Hover {
     return new vscode.Hover({
@@ -151,13 +204,7 @@ function makeHover(definition: RacerDefinition): vscode.Hover {
     });
 }
 
-export class HoverProvider implements vscode.HoverProvider {
-    provideHover(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Thenable<vscode.Hover> {
-        return racerDefinition(document, position).then(makeHover);
-    }
-}
-
-// SignatureHelpProvider
+// SignatureHelpProvider Helpers
 
 function findCaller(document: vscode.TextDocument, position: vscode.Position): vscode.Position {
     let offset = document.offsetAt(position);
@@ -211,21 +258,4 @@ function makeSignature(definition: RacerDefinition, skipFirst: boolean): vscode.
     }
 
     return info;
-}
-
-export class SignatureHelpProvider implements vscode.SignatureHelpProvider {
-    provideSignatureHelp(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Thenable<vscode.SignatureHelp> {
-        let caller = findCaller(document, position);
-        let skipFirst = isMethodCall(document, caller);
-        return racerDefinition(document, caller).then((definition) => {
-            if (caller.line === (definition.line - 1)) {
-                return null;
-            }
-            let help = new vscode.SignatureHelp();
-            help.activeParameter = countArgs(document, position, caller);
-            help.activeSignature = 0;
-            help.signatures.push(makeSignature(definition, skipFirst));
-            return help;
-        });
-    };
 }
