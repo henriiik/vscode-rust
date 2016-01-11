@@ -88,16 +88,16 @@ export class Racer {
                 child.stdin.write("\x04");
 
                 function stderrListener(data: Buffer) {
-                    console.error("ERROR!!");
+                    // console.error("ERROR!!");
                     console.error(data.toString());
-                    child.stderr.removeListener("data", stderrListener);
-                    child.stdout.removeListener("data", stdoutListener);
-                    reject(null);
+//                    child.stderr.removeListener("data", stderrListener);
+//                    child.stdout.removeListener("data", stdoutListener);
+//                    reject(null);
                 }
 
                 function stdoutListener(data: Buffer) {
-                    console.log("DATA!!");
-                    console.log(data.toString());
+                    // console.log("DATA!!");
+                    // console.log(data.toString());
                     stdout += data.toString();
                     if (stdout.endsWith("END\n")) {
                         child.stderr.removeListener("data", stderrListener);
