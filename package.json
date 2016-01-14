@@ -20,10 +20,15 @@
             "title": "Rust Configuration",
             "type": "object",
             "properties": {
-                "rust.path.racer": {
+                "rust.path.racerd": {
                     "type": "string",
-                    "default": "racer",
-                    "description": "path to the racer executable"
+                    "default": "racerd",
+                    "description": "path to the racerd executable"
+                },
+                "rust.path.rust-src": {
+                    "type": "string",
+                    "default": "",
+                    "description": "path to the src dir of the rustlang repo"
                 }
             }
         },
