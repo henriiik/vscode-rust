@@ -1,6 +1,10 @@
-import * as vscode from "vscode";
 import * as cp from "child_process";
+import * as crypto from "crypto";
+import * as fs from "fs";
 import * as http from "http";
+import * as os from "os";
+import * as path from "path";
+import * as vscode from "vscode";
 
 let itemKindMap = {
     "Const": vscode.CompletionItemKind.Variable,
@@ -134,10 +138,17 @@ function makeSignature(definition: RacerdDefinition, skipFirst: boolean): vscode
     return info;
 }
 
+function doHmac(content: string, secret: string): Buffer {
+    let hmac = crypto.createHmac("sha256", secret);
+    hmac.update(content);
+    return hmac.digest();
+}
+
 export class Racerd {
     child: cp.ChildProcess;
     hostname: string = "127.0.0.1";
     port: number = 0;
+    secret: string;
 
     constructor() {
         this.start();
@@ -145,14 +156,28 @@ export class Racerd {
 
     start() {
         let config = vscode.workspace.getConfiguration("rust.path");
+        let secretPath = path.join(os.tmpdir(), "vscode-rust-" + process.pid);
+
+        try {
+            this.secret = crypto.randomBytes(16).toString("base64");
+        } catch (e) {
+            this.secret = crypto.pseudoRandomBytes(16).toString("base64");
+        }
+
+        fs.writeFileSync(secretPath, this.secret);
 
         this.child = cp.spawn(config.get("racerd", "racerd"), [
             "serve",
-            "-l",
+            "--secret-file",
+            secretPath,
             "-p0",
             "--rust-src-path",
             config.get("rust-src", "")
         ]);
+
+        this.child.stderr.on("data", data => {
+            console.error(data.toString());
+        });
 
         this.child.stdout.on("data", (data: Buffer) => {
             let match = data.toString().match(/racerd listening at 127.0.0.1:(\d+)/);
@@ -160,13 +185,12 @@ export class Racerd {
                 this.port = Number(match[1]);
                 this.child.stdout.removeAllListeners("data");
             }
-            console.log(match);
         });
 
         this.child.on("close", (code, signal) => {
             this.start();
             console.error(code, signal);
-            vscode.window.showErrorMessage(`Racer failed (${code}): ${signal}`);
+            vscode.window.showErrorMessage(`Racerd failed (${code}): ${signal}`);
         });
     }
 
@@ -178,40 +202,56 @@ export class Racerd {
     handleErrorResponse(response: http.IncomingMessage) {
         if (response.statusCode === 204) {
             return;
+        } else if (response.statusCode === 500) {
+            this.stop();
+            this.start();
         }
-        vscode.window.showErrorMessage(`${response.statusCode}: ${response.statusMessage}`)
+        vscode.window.showErrorMessage(`${response.statusCode}: ${response.statusMessage}`);
         console.log(response);
     }
 
-    run(command: string, document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Promise<RacerdDefinition[]> {
+    sendRequest(method: string, path: string, body: string, callback: (res: http.IncomingMessage) => void): http.ClientRequest {
+        let hmac = crypto.createHmac("sha256", this.secret);
+        hmac.update(doHmac(method, this.secret));
+        hmac.update(doHmac(path, this.secret));
+        hmac.update(doHmac(body, this.secret));
+
+        let options = {
+            hostname: this.hostname,
+            port: this.port,
+            method: method,
+            path: path,
+            headers: {
+                "Content-Type": "application/json",
+                "Content-Length": body.length,
+                "x-racerd-hmac": hmac.digest("hex")
+            }
+        };
+
+        let request = http.request(options, callback);
+
+        request.write(body, "utf8");
+        request.end();
+
+        return request;
+    }
+
+    sendQuery(path: string, document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Promise<RacerdDefinition[]> {
         return new Promise<RacerdDefinition[]>((resolve, reject) => {
-            let content = JSON.stringify(makeQueryRequest(document, position));
-
-            let options = {
-                hostname: this.hostname,
-                port: this.port,
-                method: "POST",
-                path: command,
-                headers: {
-                    "Content-Type": "application/json",
-                    "Content-Length": content.length
-                }
-            };
-
-            let request = http.request(options, response => {
-                console.log(`STATUS: ${response.statusCode}`);
-                console.log(`HEADERS: ${JSON.stringify(response.headers)}`);
-
+            let body = JSON.stringify(makeQueryRequest(document, position));
+            let request = this.sendRequest("POST", path, body, response => {
                 if (response.statusCode !== 200) {
                     reject();
                     this.handleErrorResponse(response);
                     return;
+                } else if (token.isCancellationRequested) {
+                    reject();
                 }
 
                 let data = "";
 
                 response.setEncoding("utf8");
-                response.on("data", chunk => {
+                response.on("data", (chunk: Buffer) => {
                     data += chunk.toString();
                 });
 
@@ -226,22 +266,21 @@ export class Racerd {
                 });
             });
 
-            request.on("error", (e) => {
+            request.on("error", (error) => {
                 reject();
-                console.log(`problem with request: ${e.message}`);
+                console.log(`problem with request: ${error.message}`);
             });
 
-            request.write(content);
-            request.end();
+            token.onCancellationRequested(() => request.abort());
         });
     }
 
     complete(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Promise<RacerdDefinition[]> {
-        return this.run("/list_completions", document, position, token);
+        return this.sendQuery("/list_completions", document, position, token);
     }
 
     define(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Promise<RacerdDefinition> {
-        return this.run("/find_definition", document, position, token).then(matches => matches[0]);
+        return this.sendQuery("/find_definition", document, position, token).then(matches => matches[0]);
     }
 
     provideCompletionItems(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Promise<vscode.CompletionItem[]> {
