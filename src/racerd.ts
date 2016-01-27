@@ -5,27 +5,7 @@ import * as http from "http";
 import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
-
-let itemKindMap = {
-    "Const": vscode.CompletionItemKind.Variable,
-    "Crate": vscode.CompletionItemKind.Module,
-    "Enum": vscode.CompletionItemKind.Enum,
-    "EnumVariant": vscode.CompletionItemKind.Enum,
-    "FnArg": vscode.CompletionItemKind.Variable,
-    "For": vscode.CompletionItemKind.Variable,
-    "Function": vscode.CompletionItemKind.Function,
-    "IfLet": vscode.CompletionItemKind.Variable,
-    "Impl": vscode.CompletionItemKind.Interface,
-    "Let": vscode.CompletionItemKind.Variable,
-    "MatchArm": vscode.CompletionItemKind.Value,
-    "Module": vscode.CompletionItemKind.Module,
-    "Static": vscode.CompletionItemKind.Variable,
-    "Struct": vscode.CompletionItemKind.Class,
-    "StructField": vscode.CompletionItemKind.Field,
-    "Trait": vscode.CompletionItemKind.Interface,
-    "Type": vscode.CompletionItemKind.Interface,
-    "WhileLet": vscode.CompletionItemKind.Variable,
-};
+import {fsExists, fsWriteFile} from "./utils";
 
 interface FileBuffer {
     contents: string;
@@ -39,7 +19,7 @@ interface RacerdRequest {
     line: number;
 }
 
-interface RacerdDefinition {
+export interface RacerdDefinition {
     column: number;
     context: string;
     file_path: string;
@@ -62,82 +42,6 @@ function makeQueryRequest(document: vscode.TextDocument, position: vscode.Positi
     };
 }
 
-function makeCompletionItem(definition: RacerdDefinition): vscode.CompletionItem {
-    let item = new vscode.CompletionItem(definition.text);
-    item.kind = itemKindMap[definition.kind];
-    item.detail = definition.context;
-    item.documentation = definition.file_path;
-    return item;
-}
-
-function makeDefinition(definition: RacerdDefinition): vscode.Definition {
-    return new vscode.Location(vscode.Uri.file(definition.file_path), new vscode.Position(
-        definition.line - 1,
-        definition.column
-    ));
-}
-
-function makeHover(definition: RacerdDefinition): vscode.Hover {
-    return new vscode.Hover({
-        language: "rust",
-        value: `(${definition.kind}) ${definition.context.replace(/\s+/g, " ")}`
-    });
-}
-
-function findCaller(document: vscode.TextDocument, position: vscode.Position): vscode.Position {
-    let offset = document.offsetAt(position);
-    let text = document.getText(new vscode.Range(0, 0, position.line, position.character));
-
-    let depth = 1;
-    while (offset > 0 && depth > 0) {
-        offset -= 1;
-
-        let c = text.charAt(offset);
-        if (c === "(") {
-            depth -= 1;
-        } else if (c === ")") {
-            depth += 1;
-        }
-    }
-
-    return document.positionAt(offset);
-}
-
-function isMethodCall(document: vscode.TextDocument, caller: vscode.Position): boolean {
-    let callerRange = document.getWordRangeAtPosition(caller);
-    let prefixRange = new vscode.Range(
-        callerRange.start.line,
-        callerRange.start.character - 1,
-        callerRange.start.line,
-        callerRange.start.character
-    );
-    return document.getText(prefixRange) === ".";
-}
-
-function countArgs(document: vscode.TextDocument, position: vscode.Position, caller: vscode.Position) {
-    return document.getText(new vscode.Range(caller, position)).split(",").length - 1;
-}
-
-function makeSignature(definition: RacerdDefinition, skipFirst: boolean): vscode.SignatureInformation {
-    let signature = definition.context;
-    let params = signature.substring(
-        signature.indexOf("(") + 1,
-        signature.indexOf(")")
-    ).split(",");
-
-    let info = new vscode.SignatureInformation(signature);
-
-    if (skipFirst) {
-        params = params.slice(1);
-    }
-
-    for (let param of params) {
-        info.parameters.push(new vscode.ParameterInformation(param.trim()));
-    }
-
-    return info;
-}
-
 function doHmac(content: string, secret: string): Buffer {
     let hmac = crypto.createHmac("sha256", secret);
     hmac.update(content);
@@ -150,61 +54,74 @@ export class Racerd {
     port: number = 0;
     secret: string;
 
-    constructor() {
-        this.start();
-    }
-
     start() {
         let config = vscode.workspace.getConfiguration("rust.path");
+        let racerdPath = config.get("racerd", "racerd");
+        let rustSrcPath = config.get("rust-src", "");
         let secretPath = path.join(os.tmpdir(), "vscode-rust-" + process.pid);
 
-        try {
-            this.secret = crypto.randomBytes(16).toString("base64");
-        } catch (e) {
-            this.secret = crypto.pseudoRandomBytes(16).toString("base64");
-        }
+        return fsExists(racerdPath)
+            .then(() => {
+                try {
+                    this.secret = crypto.randomBytes(16).toString("base64");
+                } catch (e) {
+                    this.secret = crypto.pseudoRandomBytes(16).toString("base64");
+                }
 
-        fs.writeFileSync(secretPath, this.secret);
+                return fsWriteFile(secretPath, this.secret);
+            })
+            .then(() => {
+                this.child = cp.spawn(racerdPath, [
+                    "serve",
+                    "--secret-file",
+                    secretPath,
+                    "-p0",
+                    "--rust-src-path",
+                    rustSrcPath
+                ]);
+                this.child.stderr.on("data", data => {
+                    console.error(data.toString());
+                });
 
-        this.child = cp.spawn(config.get("racerd", "racerd"), [
-            "serve",
-            "--secret-file",
-            secretPath,
-            "-p0",
-            "--rust-src-path",
-            config.get("rust-src", "")
-        ]);
+                this.child.stdout.on("data", (data: Buffer) => {
+                    let out = data.toString();
+                    let match = out.match(/racerd listening at 127.0.0.1:(\d+)/);
+                    if (match) {
+                        this.port = Number(match[1]);
+                        this.child.stdout.removeAllListeners("data");
+                    }
+                    console.log(out);
+                });
 
-        this.child.stderr.on("data", data => {
-            console.error(data.toString());
-        });
-
-        this.child.stdout.on("data", (data: Buffer) => {
-            let match = data.toString().match(/racerd listening at 127.0.0.1:(\d+)/);
-            if (match) {
-                this.port = Number(match[1]);
-                this.child.stdout.removeAllListeners("data");
-            }
-        });
-
-        this.child.on("close", (code, signal) => {
-            this.start();
-            console.error(code, signal);
-            vscode.window.showErrorMessage(`Racerd failed (${code}): ${signal}`);
-        });
+                this.child.on("close", (code, signal) => {
+                    this.start();
+                    console.error(code, signal);
+                    vscode.window.showErrorMessage(`racerd crashed (${code}): ${signal}`);
+                });
+            })
+            .catch(error => {
+                vscode.window.showErrorMessage(`racerd error: ${error}`);
+            });
     }
 
     stop() {
-        this.child.removeAllListeners("close");
-        this.child.kill();
+        if (this.child) {
+            this.child.removeAllListeners("close");
+            this.child.kill();
+            this.child = null;
+        }
+    }
+
+    restart() {
+        this.stop();
+        return this.start();
     }
 
     handleErrorResponse(response: http.IncomingMessage) {
         if (response.statusCode === 204) {
             return;
         } else if (response.statusCode === 500) {
-            this.stop();
-            this.start();
+            this.restart();
         }
         vscode.window.showErrorMessage(`${response.statusCode}: ${response.statusMessage}`);
         console.log(response);
@@ -237,6 +154,10 @@ export class Racerd {
     }
 
     sendQuery(path: string, document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Promise<RacerdDefinition[]> {
+        if (!this.child) {
+            return null;
+        }
+
         return new Promise<RacerdDefinition[]>((resolve, reject) => {
             let body = JSON.stringify(makeQueryRequest(document, position));
             let request = this.sendRequest("POST", path, body, response => {
@@ -282,31 +203,4 @@ export class Racerd {
     define(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Promise<RacerdDefinition> {
         return this.sendQuery("/find_definition", document, position, token).then(matches => matches[0]);
     }
-
-    provideCompletionItems(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Promise<vscode.CompletionItem[]> {
-        return this.complete(document, position, token).then(matches => matches.map(makeCompletionItem));
-    }
-
-    provideDefinition(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Promise<vscode.Definition> {
-        return this.define(document, position, token).then(makeDefinition);
-    }
-
-    provideHover(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Promise<vscode.Hover> {
-        return this.define(document, position, token).then(makeHover);
-    }
-
-    provideSignatureHelp(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Promise<vscode.SignatureHelp> {
-        let caller = findCaller(document, position);
-        let skipFirst = isMethodCall(document, caller);
-        return this.define(document, caller, token).then(definition => {
-            if (caller.line === (definition.line - 1)) {
-                return null;
-            }
-            let help = new vscode.SignatureHelp();
-            help.activeParameter = countArgs(document, position, caller);
-            help.activeSignature = 0;
-            help.signatures.push(makeSignature(definition, skipFirst));
-            return help;
-        });
-    };
 }

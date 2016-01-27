@@ -1,10 +1,15 @@
 import * as vscode from "vscode";
 import * as cp from "child_process";
 import * as path from "path";
+import {RUST_MODE} from "./utils";
 
 let errorRegex = /(\w+):(\d+):(\d+):\s(\d+):(\d+)\s(\w+):\s(.*)/g;
 
-export class DocumentFormattingEditProvider implements vscode.DocumentFormattingEditProvider {
+export class FormattingProvider implements vscode.DocumentFormattingEditProvider {
+    constructor(context: vscode.ExtensionContext) {
+        context.subscriptions.push(vscode.languages.registerDocumentFormattingEditProvider(RUST_MODE, this));
+    }
+
     provideDocumentFormattingEdits(document: vscode.TextDocument, options: vscode.FormattingOptions, token: vscode.CancellationToken): Thenable<vscode.TextEdit[]> {
         return new Promise<vscode.TextEdit[]>((resolve, reject) => {
             let collection = vscode.languages.createDiagnosticCollection("Rust");
