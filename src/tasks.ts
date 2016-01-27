@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import * as fs from "fs";
+import {fsMkdir, fsWriteFile} from "./utils";
 
 let problemMatcher = [
     {
@@ -62,22 +62,17 @@ let tasks = {
 
 export function create() {
     let dir = path.join(vscode.workspace.rootPath, ".vscode");
-    fs.mkdir(dir, (err) => {
-        if (err && err.code !== "EEXIST") {
-            console.log(err);
-            vscode.window.showErrorMessage(err.message);
-        } else {
+    fsMkdir(dir)
+        .then(() => {
             let file = path.join(dir, "tasks.json");
             let data = JSON.stringify(tasks, undefined, 4);
             let options = { flag: "w" };
-            fs.writeFile(file, data, options, (err) => {
-                if (err) {
-                    console.log(err);
-                    vscode.window.showErrorMessage(`${err.code}: ${err.message}`);
-                } else {
-                    vscode.window.showInformationMessage(`${file} successfully written.`);
-                }
-            });
-        }
-    });
+            return fsWriteFile(file, data, options);
+        })
+        .then(path => {
+            vscode.window.showInformationMessage(`${path} successfully written.`);
+        })
+        .catch(error => {
+            vscode.window.showErrorMessage(`could not create tasks.json: ${error}`);
+        });
 }
