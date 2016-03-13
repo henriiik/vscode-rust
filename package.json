@@ -1,52 +1,52 @@
 {
-    "name": "vscode-rust",
-    "displayName": "Rust For Visual Studio Code",
-    "description": "Rust support for Visual Studio Code",
-    "version": "0.0.1",
-    "publisher": "henriiik",
-    "engines": {
-        "vscode": "^0.10.7"
-    },
-    "categories": [
-        "Other"
-    ],
-    "activationEvents": [
-        "onLanguage:rust",
-        "onCommand:rust.tasks.create"
-    ],
-    "main": "./out/src/extension",
-    "contributes": {
-        "configuration": {
-            "title": "Rust Configuration",
-            "type": "object",
-            "properties": {
-                "rust.path.racerd": {
-                    "type": "string",
-                    "default": "racerd",
-                    "description": "path to the racerd executable"
-                },
-                "rust.path.rust-src": {
-                    "type": "string",
-                    "default": "",
-                    "description": "path to the src dir of the rustlang repo"
-                }
-            }
+  "name": "vscode-rust",
+  "displayName": "Rust For Visual Studio Code",
+  "description": "Rust support for Visual Studio Code",
+  "version": "0.0.1",
+  "publisher": "henriiik",
+  "engines": {
+    "vscode": "^0.10.9"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onLanguage:rust",
+    "onCommand:rust.tasks.create"
+  ],
+  "main": "./out/src/extension",
+  "contributes": {
+    "configuration": {
+      "title": "Rust Configuration",
+      "type": "object",
+      "properties": {
+        "rust.path.racerd": {
+          "type": "string",
+          "default": "racerd",
+          "description": "path to the racerd executable"
         },
-        "commands": [
-            {
-                "command": "rust.tasks.create",
-                "title": "Rust: Create Tasks Configuration"
-            }
-        ]
+        "rust.path.rust-src": {
+          "type": "string",
+          "default": "",
+          "description": "path to the src dir of the rustlang repo"
+        }
+      }
     },
-    "scripts": {
-        "vscode:prepublish": "node ./node_modules/vscode/bin/compile",
-        "compile": "node ./node_modules/vscode/bin/compile -watch -p ./",
-        "postinstall": "node ./node_modules/vscode/bin/install"
-    },
-    "devDependencies": {
-        "tslint": "^3.5.0",
-        "typescript": "^1.8.2",
-        "vscode": "^0.11.1"
-    }
+    "commands": [
+      {
+        "command": "rust.tasks.create",
+        "title": "Rust: Create Tasks Configuration"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "node ./node_modules/vscode/bin/compile",
+    "compile": "node ./node_modules/vscode/bin/compile -watch -p ./",
+    "postinstall": "node ./node_modules/vscode/bin/install"
+  },
+  "devDependencies": {
+    "tslint": "^3.6.0",
+    "typescript": "^1.8.7",
+    "vscode": "^0.11.8"
+  }
 }
