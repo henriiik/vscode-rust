@@ -34,6 +34,11 @@ let tasks = {
     "isShellCommand": true,
     "showOutput": "always",
     "echoCommand": true,
+    "options": {
+        "env": {
+            "RUST_BACKTRACE": "1"
+        }
+    },
     "tasks": [
         {
             "taskName": "build",
