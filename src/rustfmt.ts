@@ -4,6 +4,7 @@ import * as path from "path";
 import {RUST_MODE} from "./utils";
 
 let errorRegex = /(\w+):(\d+):(\d+):\s(\d+):(\d+)\s(\w+):\s(.*)/g;
+let warningRegex = /Rustfmt failed at stdin:(\d+):\s(.*)/g;
 
 export class FormattingProvider implements vscode.DocumentFormattingEditProvider {
     constructor(context: vscode.ExtensionContext) {
@@ -31,16 +32,23 @@ export class FormattingProvider implements vscode.DocumentFormattingEditProvider
                 let output = data.toString();
                 let message: RegExpExecArray;
                 while (message = errorRegex.exec(output)) {
-                    diagnostics.push(formatMessage(message));
+                    diagnostics.push(formatError(message));
+                }
+                while (message = warningRegex.exec(output)) {
+                    diagnostics.push(formatWarning(message));
                 }
             });
 
             child.on("close", (code) => {
-                if (code > 0) {
+                if (code ==  3) {
+                    collection.set(document.uri, diagnostics);
+                    vscode.window.showWarningMessage("Formatted with warnings.");
+                } else if (code > 0) {
                     collection.set(document.uri, diagnostics);
                     vscode.window.showErrorMessage("Could not format file.");
-                    reject(null);
-                } else {
+                }
+
+                if (code == 0 || code == 3) {
                     let range = new vscode.Range(
                         0,
                         0,
@@ -48,13 +56,15 @@ export class FormattingProvider implements vscode.DocumentFormattingEditProvider
                         Number.MAX_VALUE
                     );
                     resolve([new vscode.TextEdit(range, formatted)]);
+                } else {
+                    reject(null);
                 }
             });
         });
     }
 }
 
-function formatMessage(message: RegExpExecArray): vscode.Diagnostic {
+function formatError(message: RegExpExecArray): vscode.Diagnostic {
     return new vscode.Diagnostic(
         new vscode.Range(
             Number(message[2]) - 1,
@@ -65,4 +75,17 @@ function formatMessage(message: RegExpExecArray): vscode.Diagnostic {
         message[7],
         vscode.DiagnosticSeverity.Error
     );
+}
+
+function formatWarning(message: RegExpExecArray): vscode.Diagnostic {
+    return new vscode.Diagnostic(
+        new vscode.Range(
+            Number(message[1]) - 1,
+            0,
+            Number(message[1]) - 1,
+            Number.MAX_VALUE
+        ),
+        message[2],
+        vscode.DiagnosticSeverity.Warning
+    )
 }
