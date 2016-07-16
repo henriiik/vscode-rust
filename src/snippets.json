@@ -1,0 +1,220 @@
+{
+    "assert!": {
+        "prefix": "assert!",
+        "body": [
+            "assert!($0)"
+        ],
+        "description": "Ensure that a boolean expression is true at runtime."
+    },
+    "assert_eq!": {
+        "prefix": "assert_eq!",
+        "body": [
+            "assert_eq!($0)"
+        ],
+        "description": "Asserts that two expressions are equal to each other."
+    },
+    "cfg!": {
+        "prefix": "cfg!",
+        "body": [
+            "cfg!($0)"
+        ],
+        "description": "Boolean evaluation of configuration flags."
+    },
+    "column!": {
+        "prefix": "column!",
+        "body": [
+            "column!($0)"
+        ],
+        "description": "A macro which expands to the column number on which it was invoked."
+    },
+    "concat!": {
+        "prefix": "concat!",
+        "body": [
+            "concat!($0)"
+        ],
+        "description": "Concatenates literals into a static string slice."
+    },
+    "concat_idents!": {
+        "prefix": "concat_idents!",
+        "body": [
+            "concat_idents!($0)"
+        ],
+        "description": "Concatenate identifiers into one identifier."
+    },
+    "debug_assert!": {
+        "prefix": "debug_assert!",
+        "body": [
+            "debug_assert!($0)"
+        ],
+        "description": "Ensure that a boolean expression is true at runtime."
+    },
+    "debug_assert_eq!": {
+        "prefix": "debug_assert_eq!",
+        "body": [
+            "debug_assert_eq!($0)"
+        ],
+        "description": "Asserts that two expressions are equal to each other."
+    },
+    "env!": {
+        "prefix": "env!",
+        "body": [
+            "env!($0)"
+        ],
+        "description": "Inspect an environment variable at compile time."
+    },
+    "file!": {
+        "prefix": "file!",
+        "body": [
+            "file!($0)"
+        ],
+        "description": "A macro which expands to the file name from which it was invoked."
+    },
+    "format!": {
+        "prefix": "format!",
+        "body": [
+            "format!($0)"
+        ],
+        "description": "Use the syntax described in `std::fmt` to create a value of type String. See `std::fmt` for more information."
+    },
+    "format_args!": {
+        "prefix": "format_args!",
+        "body": [
+            "format_args!($0)"
+        ],
+        "description": "The core macro for formatted string creation & output."
+    },
+    "include!": {
+        "prefix": "include!",
+        "body": [
+            "include!($0)"
+        ],
+        "description": "Parse the current given file as an expression."
+    },
+    "include_bytes!": {
+        "prefix": "include_bytes!",
+        "body": [
+            "include_bytes!($0)"
+        ],
+        "description": "Includes a file as a reference to a byte array."
+    },
+    "include_str!": {
+        "prefix": "include_str!",
+        "body": [
+            "include_str!($0)"
+        ],
+        "description": "Includes a utf8-encoded file as a string."
+    },
+    "line!": {
+        "prefix": "line!",
+        "body": [
+            "line!($0)"
+        ],
+        "description": "A macro which expands to the line number on which it was invoked."
+    },
+    "module_path!": {
+        "prefix": "module_path!",
+        "body": [
+            "module_path!($0)"
+        ],
+        "description": "Expands to a string that represents the current module path."
+    },
+    "option_env!": {
+        "prefix": "option_env!",
+        "body": [
+            "option_env!($0)"
+        ],
+        "description": "Optionally inspect an environment variable at compile time."
+    },
+    "panic!": {
+        "prefix": "panic!",
+        "body": [
+            "panic!($0)"
+        ],
+        "description": "The entry point for panic of Rust threads."
+    },
+    "print!": {
+        "prefix": "print!",
+        "body": [
+            "print!($0)"
+        ],
+        "description": "Macro for printing to the standard output."
+    },
+    "println!": {
+        "prefix": "println!",
+        "body": [
+            "println!($0)"
+        ],
+        "description": "Macro for printing to the standard output, with a newline."
+    },
+    "select!": {
+        "prefix": "select!",
+        "body": [
+            "select!($0)"
+        ],
+        "description": "A macro to select an event from a number of receivers."
+    },
+    "stringify!": {
+        "prefix": "stringify!",
+        "body": [
+            "stringify!($0)"
+        ],
+        "description": "A macro which stringifies its argument."
+    },
+    "thread_local!": {
+        "prefix": "thread_local!",
+        "body": [
+            "thread_local!($0)"
+        ],
+        "description": "Declare a new thread local storage key of type `std::thread::LocalKey`."
+    },
+    "try!": {
+        "prefix": "try!",
+        "body": [
+            "try!($0)"
+        ],
+        "description": "Helper macro for unwrapping Result values while returning early with an error if the value of the expression is Err."
+    },
+    "unimplemented!": {
+        "prefix": "unimplemented!",
+        "body": [
+            "unimplemented!($0)"
+        ],
+        "description": "A standardized placeholder for marking unfinished code. It panics with the message \"not yet implemented\" when executed."
+    },
+    "unreachable!": {
+        "prefix": "unreachable!",
+        "body": [
+            "unreachable!($0)"
+        ],
+        "description": "A utility macro for indicating unreachable code."
+    },
+    "vec!": {
+        "prefix": "vec!",
+        "body": [
+            "vec!($0)"
+        ],
+        "description": "Creates a Vec containing the arguments."
+    },
+    "write!": {
+        "prefix": "write!",
+        "body": [
+            "write!($0)"
+        ],
+        "description": "Use the format! syntax to write data into a buffer."
+    },
+    "writeln!": {
+        "prefix": "writeln!",
+        "body": [
+            "writeln!($0)"
+        ],
+        "description": "Use the format! syntax to write data into a buffer, appending a newline."
+    },
+    "Function": {
+        "prefix": "fn",
+        "body": [
+            "fn ${name}(${argument}: ${type}) {",
+            "   $1",
+            "}"
+        ]
+    }
+}
