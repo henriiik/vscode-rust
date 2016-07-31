@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import {Racerd, RacerdDefinition} from "./racerd";
+import {Racer, RacerDefinition} from "./racer";
 import {RUST_MODE} from "./utils";
 
 let itemKindMap = {
@@ -23,22 +23,22 @@ let itemKindMap = {
     "WhileLet": vscode.CompletionItemKind.Variable,
 };
 
-function makeCompletionItem(definition: RacerdDefinition): vscode.CompletionItem {
+function makeCompletionItem(definition: RacerDefinition): vscode.CompletionItem {
     let item = new vscode.CompletionItem(definition.text);
     item.kind = itemKindMap[definition.kind];
     item.detail = definition.context;
-    item.documentation = definition.file_path;
+    item.documentation = definition.file_path.replace(vscode.workspace.rootPath + "/", "");
     return item;
 }
 
-function makeDefinition(definition: RacerdDefinition): vscode.Definition {
+function makeDefinition(definition: RacerDefinition): vscode.Definition {
     return new vscode.Location(vscode.Uri.file(definition.file_path), new vscode.Position(
         definition.line - 1,
         definition.column
     ));
 }
 
-function makeHover(definition: RacerdDefinition): vscode.Hover {
+function makeHover(definition: RacerDefinition): vscode.Hover {
     return new vscode.Hover({
         language: "rust",
         value: `(${definition.kind}) ${definition.context.replace(/\s+/g, " ")}`
@@ -79,7 +79,7 @@ function countArgs(document: vscode.TextDocument, position: vscode.Position, cal
     return document.getText(new vscode.Range(caller, position)).split(",").length - 1;
 }
 
-function makeSignature(definition: RacerdDefinition, skipFirst: boolean): vscode.SignatureInformation {
+function makeSignature(definition: RacerDefinition, skipFirst: boolean): vscode.SignatureInformation {
     let signature = definition.context;
     let params = signature.substring(
         signature.indexOf("(") + 1,
@@ -99,37 +99,33 @@ function makeSignature(definition: RacerdDefinition, skipFirst: boolean): vscode
     return info;
 }
 
-
 export class DefinitionProvider {
-    racerd: Racerd;
+    racer: Racer;
 
     constructor(context: vscode.ExtensionContext) {
-        this.racerd = new Racerd();
-        this.racerd.start()
-            .then(() => {
-                context.subscriptions.push(vscode.languages.registerCompletionItemProvider(RUST_MODE, this));
-                context.subscriptions.push(vscode.languages.registerDefinitionProvider(RUST_MODE, this));
-                context.subscriptions.push(vscode.languages.registerHoverProvider(RUST_MODE, this));
-                context.subscriptions.push(vscode.languages.registerSignatureHelpProvider(RUST_MODE, this, ...["(", ","]));
-            });
+        this.racer = new Racer();
+        context.subscriptions.push(vscode.languages.registerCompletionItemProvider(RUST_MODE, this));
+        context.subscriptions.push(vscode.languages.registerDefinitionProvider(RUST_MODE, this));
+        context.subscriptions.push(vscode.languages.registerHoverProvider(RUST_MODE, this));
+        context.subscriptions.push(vscode.languages.registerSignatureHelpProvider(RUST_MODE, this, ...["(", ","]));
     };
 
     provideCompletionItems(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Promise<vscode.CompletionItem[]> {
-        return this.racerd.complete(document, position, token).then(matches => matches.map(makeCompletionItem));
+        return this.racer.complete(document, position, token).then(matches => matches.map(makeCompletionItem));
     }
 
     provideDefinition(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Promise<vscode.Definition> {
-        return this.racerd.define(document, position, token).then(makeDefinition);
+        return this.racer.define(document, position, token).then(makeDefinition);
     }
 
     provideHover(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Promise<vscode.Hover> {
-        return this.racerd.define(document, position, token).then(makeHover);
+        return this.racer.define(document, position, token).then(makeHover);
     }
 
     provideSignatureHelp(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Promise<vscode.SignatureHelp> {
         let caller = findCaller(document, position);
         let skipFirst = isMethodCall(document, caller);
-        return this.racerd.define(document, caller, token).then(definition => {
+        return this.racer.define(document, caller, token).then(definition => {
             if (caller.line === (definition.line - 1)) {
                 return null;
             }

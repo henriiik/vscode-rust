@@ -9,9 +9,5 @@ export function activate(context: vscode.ExtensionContext) {
     let definitionProvider = new DefinitionProvider(context);
     let formattingProvider = new FormattingProvider(context);
 
-    context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(() => {
-        definitionProvider.racerd.restart();
-    }));
-
     context.subscriptions.push(vscode.commands.registerCommand("rust.tasks.create", tasks.create));
 }
