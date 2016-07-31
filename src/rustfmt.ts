@@ -40,7 +40,7 @@ export class FormattingProvider implements vscode.DocumentFormattingEditProvider
             });
 
             child.on("close", (code) => {
-                if (code ==  3) {
+                if (code ===  3) {
                     collection.set(document.uri, diagnostics);
                     vscode.window.showWarningMessage("Formatted with warnings.");
                 } else if (code > 0) {
@@ -48,7 +48,7 @@ export class FormattingProvider implements vscode.DocumentFormattingEditProvider
                     vscode.window.showErrorMessage("Could not format file.");
                 }
 
-                if (code == 0 || code == 3) {
+                if (code === 0 || code === 3) {
                     let range = new vscode.Range(
                         0,
                         0,
@@ -87,5 +87,5 @@ function formatWarning(message: RegExpExecArray): vscode.Diagnostic {
         ),
         message[2],
         vscode.DiagnosticSeverity.Warning
-    )
+    );
 }
