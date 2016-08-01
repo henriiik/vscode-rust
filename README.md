@@ -18,6 +18,13 @@ This is a work-in-progress extension to [Visual Studio Code](https://code.visual
 
 - Format file
 
+## Rustsym
+
+[rustsym](https://github.com/trixnz/rustsym) is a tool to query symbols from rust code for use in IDEs.
+
+- Go to Document symbol
+- Go to Workspace symbols
+
 ## Other
 
 vscode-rust can create a tasks.json file in your project that will give you tasks with problem matchers for building, testing and more.
