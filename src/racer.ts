@@ -3,9 +3,9 @@ import * as cp from "child_process";
 import {RUST_MODE} from "./utils";
 
 export interface RacerDefinition {
-    column: number;
+    character: number;
     context: string;
-    file_path: string;
+    path: string;
     kind: string;
     line: number;
     text: string;
@@ -36,14 +36,14 @@ function makeCompletionItem(definition: RacerDefinition): vscode.CompletionItem 
     let item = new vscode.CompletionItem(definition.text);
     item.kind = itemKindMap[definition.kind];
     item.detail = definition.context;
-    item.documentation = definition.file_path.replace(vscode.workspace.rootPath + "/", "");
+    item.documentation = definition.path.replace(vscode.workspace.rootPath + "/", "");
     return item;
 }
 
 function makeDefinition(definition: RacerDefinition): vscode.Definition {
-    return new vscode.Location(vscode.Uri.file(definition.file_path), new vscode.Position(
+    return new vscode.Location(vscode.Uri.file(definition.path), new vscode.Position(
         definition.line - 1,
-        definition.column
+        definition.character
     ));
 }
 
@@ -115,7 +115,7 @@ function complete(document: vscode.TextDocument, position: vscode.Position, toke
         let rustSrcPath = config.get("rust-src", "");
 
         let line = position.line + 1;
-        let char = position.character;
+        let character = position.character;
         let path = document.uri.fsPath;
 
         let child = cp.spawn(racerPath, [
@@ -123,7 +123,7 @@ function complete(document: vscode.TextDocument, position: vscode.Position, toke
             "text",
             "complete",
             line.toString(),
-            char.toString(),
+            character.toString(),
             path.toString(),
             "-"
         ]);
@@ -139,9 +139,9 @@ function complete(document: vscode.TextDocument, position: vscode.Position, toke
                 if (line.startsWith("MATCH ")) {
                     let match = line.split(",");
                     matches.push({
-                        column: Number(match[2]),
+                        character: Number(match[2]),
                         context: match.slice(5).join(),
-                        file_path: match[3],
+                        path: match[3],
                         kind: match[4],
                         line: Number(match[1]),
                         text: match[0].substr(6),
