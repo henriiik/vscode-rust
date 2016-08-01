@@ -139,11 +139,11 @@ function complete(document: vscode.TextDocument, position: vscode.Position, toke
                 if (line.startsWith("MATCH ")) {
                     let match = line.split(",");
                     matches.push({
-                        column: Number(match[1]),
+                        column: Number(match[2]),
                         context: match.slice(5).join(),
                         file_path: match[3],
                         kind: match[4],
-                        line: Number(match[2]),
+                        line: Number(match[1]),
                         text: match[0].substr(6),
                     });
                     console.log(match);
