@@ -6,11 +6,7 @@ import {RUST_MODE} from "./utils";
 let errorRegex = /(\w+):(\d+):(\d+):\s(\d+):(\d+)\s(\w+):\s(.*)/g;
 let warningRegex = /Rustfmt failed at stdin:(\d+):\s(.*)/g;
 
-export class FormattingProvider implements vscode.DocumentFormattingEditProvider {
-    constructor(context: vscode.ExtensionContext) {
-        context.subscriptions.push(vscode.languages.registerDocumentFormattingEditProvider(RUST_MODE, this));
-    }
-
+export class Rustfmt {
     provideDocumentFormattingEdits(document: vscode.TextDocument, options: vscode.FormattingOptions, token: vscode.CancellationToken): Thenable<vscode.TextEdit[]> {
         return new Promise<vscode.TextEdit[]>((resolve, reject) => {
             let collection = vscode.languages.createDiagnosticCollection("Rust");
@@ -40,7 +36,7 @@ export class FormattingProvider implements vscode.DocumentFormattingEditProvider
             });
 
             child.on("close", (code) => {
-                if (code ===  3) {
+                if (code === 3) {
                     collection.set(document.uri, diagnostics);
                     vscode.window.showWarningMessage("Formatted with warnings.");
                 } else if (code > 0) {
